@@ -16,12 +16,6 @@ from interface.ui_helpers import show_loading_gif
 from core.cache_manager import cache  
 
 # -----------------------
-# Page setup
-# -----------------------
-st.set_page_config(page_title="What's up Doc? 🤖🩺")
-st.title("What's up Doc? ⚕️📖")
-
-# -----------------------
 # Sidebar: settings + API key
 # -----------------------
 with st.sidebar:
