@@ -17,12 +17,16 @@ if BASE_DIR not in sys.path:
 # -----------------------
 # Page Config — only once
 # -----------------------
-st.set_page_config(page_title="What's up Doc? 🤖🩺", layout="wide")
+st.set_page_config(
+    page_title="What's up Doc? 🤖🩺",
+    page_icon="🩺",
+    layout="wide"
+)
 st.title("What's up Doc? ⚕️📖")
 st.caption("Empowering multilingual, evidence-based medical search and summarisation.")
 
 # -----------------------
 # Load Main UI
 # -----------------------
-from interface import streamlit_ui  # This executes the main UI logic
-
+if __name__ == "__main__":
+    from interface import streamlit_ui  # Executes the main UI
