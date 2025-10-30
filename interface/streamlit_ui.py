@@ -64,6 +64,11 @@ if submit and user_query:
 # Display chat history
 # -----------------------
 if st.session_state.memory:
-    from interface.ui_helpers import show_chat_history
-    show_chat_history(st.session_state.memory)
-    
+    with st.expander("🩺 View Chat History", expanded=False):
+        history_md = ""
+        for msg in st.session_state.memory[-10:]:
+            if msg.__class__.__name__ == "HumanMessage":
+                history_md += f"**You:** {msg.content}  \n"
+            else:
+                history_md += f"**DocBot:**  \n{msg.content.replace(chr(10), '  \n')}  \n\n"
+        st.markdown(history_md, unsafe_allow_html=True)
