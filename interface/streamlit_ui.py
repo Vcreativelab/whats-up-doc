@@ -32,9 +32,12 @@ os.environ["GOOGLE_API_KEY"] = gemini_api_key
 genai.configure(api_key=gemini_api_key)
 
 # -----------------------
-# Initialize chat memory
+# Initialize chat memory (LangChain ConversationBufferWindowMemory)
 # -----------------------
-memory = init_memory(k=k_value)
+# init_memory() will set st.session_state.memory to a ConversationBufferWindowMemory
+memory = init_memory(k=k_value if 'k_value' in locals() else 3)
+# keep a local reference for convenience
+memory = st.session_state.memory
 
 # -----------------------
 # User Input Form
@@ -57,18 +60,24 @@ if submit and user_query:
     st.markdown("### 🧠 Suggestion")
     st.markdown(answer.replace("\n", "  \n"), unsafe_allow_html=True)
 
-    st.session_state.memory.append(HumanMessage(content=user_query))
-    st.session_state.memory.append(AIMessage(content=answer))
+    # Update memory correctly for ConversationBufferWindowMemory
+    st.session_state.memory.chat_memory.add_message(HumanMessage(content=user_query))
+    st.session_state.memory.chat_memory.add_message(AIMessage(content=answer))
+
 
 # -----------------------
 # Display chat history
 # -----------------------
-if st.session_state.memory:
+if st.session_state.memory and hasattr(st.session_state.memory, "chat_memory"):
     with st.expander("🩺 View Chat History", expanded=False):
         history_md = ""
-        for msg in st.session_state.memory[-10:]:
+        # chat_memory.messages is a list of Message objects
+        for msg in st.session_state.memory.chat_memory.messages[-10:]:
+            # LangChain message classes don't always match isinstance checks across versions,
+            # so compare by class name for robustness:
             if msg.__class__.__name__ == "HumanMessage":
                 history_md += f"**You:** {msg.content}  \n"
             else:
                 history_md += f"**DocBot:**  \n{msg.content.replace(chr(10), '  \n')}  \n\n"
         st.markdown(history_md, unsafe_allow_html=True)
+
