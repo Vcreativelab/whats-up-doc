@@ -1,31 +1,14 @@
-"""
-app.py — What's up Doc? 🤖🩺
-Entry point for the Custom Medical Agent.
-"""
-
-import os
-import sys
 import streamlit as st
+from interface.streamlit_ui import show_ui
 
-# -----------------------
-# Path Setup
-# -----------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
-
-# -----------------------
-# Page Config — only once
-# -----------------------
 st.set_page_config(
     page_title="What's up Doc? 🤖🩺",
     page_icon="🩺",
     layout="wide"
 )
+
 st.title("What's up Doc? ⚕️📖")
 st.caption("Empowering multilingual, evidence-based medical search and summarisation.")
 
-# -----------------------
-# Load Main UI (no __main__ guard)
-# -----------------------
-from interface import streamlit_ui  # Direct import, always runs
+if __name__ == "__main__":
+    show_ui()
