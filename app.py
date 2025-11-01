@@ -26,7 +26,6 @@ st.title("What's up Doc? ⚕️📖")
 st.caption("Empowering multilingual, evidence-based medical search and summarisation.")
 
 # -----------------------
-# Load Main UI
+# Load Main UI (no __main__ guard)
 # -----------------------
-if __name__ == "__main__":
-    from interface import streamlit_ui  # Executes the main UI
+from interface import streamlit_ui  # Direct import, always runs
