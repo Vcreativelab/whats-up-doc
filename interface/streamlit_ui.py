@@ -29,6 +29,8 @@ with st.sidebar:
 
 # Configure Gemini
 os.environ["GOOGLE_API_KEY"] = gemini_api_key
+st.write(f"🔑 Using API key (truncated): {gemini_api_key[:6]}***")
+
 genai.configure(api_key=gemini_api_key)
 
 # -----------------------
@@ -51,11 +53,20 @@ with st.form("query_form", clear_on_submit=True):
 # Process submission
 # -----------------------
 if submit and user_query:
-    with st.spinner("🧠 Processing your question..."):
-        gif_placeholder = show_loading_gif()
+    st.info("⏳ Processing your question, please wait...")
+    gif_placeholder = show_loading_gif()
+
+    try:
+        st.write("🔹 Calling backend...")
         answer = get_medical_answer(user_query)
-        time.sleep(0.5)
+        st.write("✅ Backend call complete.")
+    except Exception as e:
         gif_placeholder.empty()
+        st.error(f"❌ An error occurred: {e}")
+        st.stop()
+
+    time.sleep(0.5)
+    gif_placeholder.empty()
 
     st.markdown("### 🧠 Suggestion")
     st.markdown(answer.replace("\n", "  \n"), unsafe_allow_html=True)
