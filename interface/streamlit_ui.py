@@ -52,20 +52,25 @@ with st.form("query_form", clear_on_submit=True):
 # -----------------------
 # Process submission
 # -----------------------
+# -----------------------
+# Process submission
+# -----------------------
 if submit and user_query:
-    st.info("⏳ Processing your question, please wait...")
+    st.info("[DEBUG] submit pressed", icon="🔘")
     gif_placeholder = show_loading_gif()
 
-    try:
-        st.write("🔹 Calling backend...")
-        answer = get_medical_answer(user_query)
-        st.write("✅ Backend call complete.")
-    except Exception as e:
-        gif_placeholder.empty()
-        st.error(f"❌ An error occurred: {e}")
-        st.stop()
+    # Show a spinner and a debug message in the UI so we can see progress
+    with st.spinner("Calling backend — this may take a few seconds..."):
+        st.info("[DEBUG] calling get_medical_answer()", icon="🧭")
+        try:
+            answer = get_medical_answer(user_query)
+            st.success("[DEBUG] backend returned", icon="✅")
+        except Exception as e:
+            gif_placeholder.empty()
+            st.error(f"[ERROR] get_medical_answer failed: {e}")
+            raise
 
-    time.sleep(0.5)
+    # Clear animation
     gif_placeholder.empty()
 
     st.markdown("### 🧠 Suggestion")
