@@ -48,7 +48,7 @@ medical_runnable = (
 
 def get_medical_answer(query: str) -> str:
     """Generate multilingual, evidence-based medical response."""
-    print(f"[DEBUG] get_medical_answer called with: {query}")
+    st.info(f"[DEBUG] get_medical_answer called with: {query[:120]}")
 
     final_response = None
     tokens_this_request = max(len(query) // 4, 1)
@@ -63,7 +63,7 @@ def get_medical_answer(query: str) -> str:
         memory = init_memory()
         context = {"input": translated_query, "history": memory.chat_memory.messages}
         routed_input = router_chain.invoke(context)
-        print("[DEBUG] Translation + routing completed.")
+        st.info("[DEBUG] Translation + routing completed.")
 
 
         if isinstance(routed_input, dict) and (
@@ -71,7 +71,7 @@ def get_medical_answer(query: str) -> str:
             "Sources referenced" in routed_input.get("input", "")
         ):
             final_response = routed_input.get("input")
-            print("[DEBUG] Returning final_response.")
+            st.info("[DEBUG] Returning final_response.")
 
         else:
             english_response = medical_runnable.invoke(routed_input)
