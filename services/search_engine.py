@@ -10,7 +10,11 @@ from langchain.tools import StructuredTool
 from langchain_community.tools import DuckDuckGoSearchRun
 from core.cache_manager import cache, cache_result
 
+# --------------------------------
+# Configuration
+# --------------------------------
 search_engine = DuckDuckGoSearchRun()
+MAX_SNIPPET_LEN = 500  # can raise to 800 if truncation cuts too early
 
 SAFE_SOURCES = [
     "webmd.com",
@@ -21,28 +25,59 @@ SAFE_SOURCES = [
 ]
 
 
+# --------------------------------
+# Helper
+# --------------------------------
+def truncate_snippet(snippet: str) -> str:
+    """Ensure consistent, readable snippets."""
+    snippet = snippet.strip().replace("\n", " ")
+    if len(snippet) > MAX_SNIPPET_LEN:
+        snippet = snippet[:MAX_SNIPPET_LEN].rsplit(" ", 1)[0] + "..."
+    return snippet
+
+
+# --------------------------------
+# Core Search
+# --------------------------------
 def medical_search(query: str):
     """Cached, source-restricted search for evidence-based medical information."""
     query_key = query.strip().lower()
+
+    # Check cache first
     if query_key in cache:
         data = cache[query_key]
         st.info(f"🔁 Using cached results for '{query}' (last updated {data['timestamp']}).")
         return data["results"]
 
-    st.info(f"🌐 Searching live sources for '{query}' ...")
+    # Indicate live search
+    st.info(f"🌐 Searching verified sources for: **{query}**")
+
     results = {}
     for src in SAFE_SOURCES:
         try:
+            st.info(f"[DEBUG] Searching {src}...", icon="🔎")
             res = search_engine.run(f"site:{src} {query}")
             if res:
-                results[src] = res[:400]
+                results[src] = truncate_snippet(res)
+                st.success(f"[DEBUG] ✅ Found results from {src}")
+            else:
+                st.warning(f"[DEBUG] ⚠️ No content returned from {src}")
         except Exception as e:
             results[src] = f"Search failed ({e})"
+            st.error(f"[DEBUG] ❌ Error searching {src}: {e}")
 
+    # Save to cache
     cache_result(cache, query_key, results)
+
+    if not results:
+        st.warning(f"⚠️ No results found for '{query}'")
+
     return results
 
 
+# --------------------------------
+# Tool registration
+# --------------------------------
 medical_search_tool = StructuredTool.from_function(
     func=medical_search,
     name="MedicalSearch",
