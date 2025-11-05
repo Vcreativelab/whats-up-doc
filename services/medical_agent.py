@@ -115,6 +115,8 @@ def get_medical_answer(query: str) -> str:
                 "history": routed_input.get("history", []),
                 "input": routed_input.get("input", "")
             })
+            # Clean up duplicates and repeated labels
+            english_response = english_response.replace("**Question:**", "").replace("**Answer:**", "").strip()
             final_response = f"""**Question:** {query}    
 
 **Answer:**  
