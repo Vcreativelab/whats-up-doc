@@ -9,6 +9,7 @@ import diskcache as dc
 import streamlit as st
 from datetime import datetime
 from core.config import CACHE_TTL
+import re
 
 # --- Initialize caches ---
 BASE_DIR = os.getcwd()
@@ -44,3 +45,10 @@ def get_cached_result(cache_obj, key: str):
         st.info(f"🔁 Using cached results for '{key}' (last updated {ts}).")
         return data["results"]
     return None
+
+def normalize_query_key(text: str) -> str:
+    """Normalize a query string to ensure consistent cache keys."""
+    text = text.strip().lower()
+    text = re.sub(r"[^\w\s]", "", text)  # remove punctuation
+    text = re.sub(r"\s+", " ", text)     # collapse extra spaces
+    return text
