@@ -7,7 +7,7 @@ a search-based summarisation or direct LLM response.
 
 import re
 from langchain_core.runnables import RunnableLambda, RunnableBranch
-from services.summariser import summarise_runnable
+from services.summariser import summarise_medical_sources
 from services.search_engine import medical_search
 from utils.formatting import format_sources
 
@@ -33,10 +33,11 @@ def enrich_with_question_and_history(prev, original):
 
 
 def summarise_with_sources(data):
-    summary = summarise_runnable.invoke({
-        "sources": data["sources"],
-        "question": data["question"]
-    })
+    # summary = summarise_runnable.invoke({
+    #    "sources": data["sources"],
+    #    "question": data["question"]
+    # })
+    summary = summarise_medical_sources(data["sources"], data["question"])
     return {
         "summary": summary,
         "sources": data["sources"],
