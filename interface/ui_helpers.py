@@ -21,7 +21,6 @@ def show_loading_gif() -> "st.delta_generator.DeltaGenerator":
                 <div style="text-align: center;">
                     <img src="https://github.com/Vcreativelab/whats-up-doc/blob/main/doc.gif?raw=true" 
                          width="220" style="border-radius: 10px; margin-bottom: 0.5rem;">
-                    <p style="color: gray; font-size: 0.9rem;">🧠 Processing your question...</p>
                 </div>
                 """,
                 unsafe_allow_html=True
