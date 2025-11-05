@@ -14,11 +14,13 @@ from core.rate_limiter import is_rate_limited
 from services.translator import detect_and_translate, translate_back_to_original_language
 from services.router import router_chain
 from core.memory_manager import init_memory
+from utils.formatting import clean_response_text
 
 
-# ─────────────────────────────────────────────
+
+# --------------------------------
 # Prompt Definition
-# ─────────────────────────────────────────────
+# --------------------------------
 medical_prompt = ChatPromptTemplate.from_template("""
 You are **DocBot**, a multilingual, evidence-based medical assistant. 
 
@@ -56,25 +58,9 @@ medical_runnable = (
 )
 
 
-# ─────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────
-def remove_duplicate_disclaimers(text: str) -> str:
-    """Remove repeated disclaimer lines or warnings."""
-    seen = set()
-    filtered = []
-    for line in map(str.strip, text.splitlines()):
-        lower_line = line.lower()
-        if any(k in lower_line for k in ["⚠️", "disclaimer"]) and lower_line in seen:
-            continue
-        seen.add(lower_line)
-        filtered.append(line)
-    return "\n".join(filtered).strip()
-
-
-# ─────────────────────────────────────────────
+# --------------------------------
 # Main Medical Answer Function
-# ─────────────────────────────────────────────
+# --------------------------------
 def get_medical_answer(query: str) -> str:
     """Generate multilingual, evidence-based medical response."""
     # Optional debugging toggle
@@ -107,7 +93,7 @@ def get_medical_answer(query: str) -> str:
             "Verified medical information" in routed_input.get("input", "") or
             "Sources referenced" in routed_input.get("input", "")
         ):
-            final_response = routed_input.get("input")
+            final_response = clean_response_text(routed_input.get("input", ""))
 
         # Step 5: Otherwise, generate direct model response
         else:
@@ -116,7 +102,6 @@ def get_medical_answer(query: str) -> str:
                 "input": routed_input.get("input", "")
             })
             # Clean up duplicates and repeated labels
-            english_response = english_response.replace("**Question:**", "").replace("**Answer:**", "").strip()
             final_response = f"""**Question:** {query}    
 
 **Answer:**  
@@ -125,7 +110,7 @@ def get_medical_answer(query: str) -> str:
 ---
 
 ⚠️ *This information is for educational purposes only and should not replace professional medical advice.*"""
-            final_response = remove_duplicate_disclaimers(final_response)
+            final_response = clean_response_text(final_response)
 
         # Step 6: Translate back if needed
         if user_lang.lower() != "en":
