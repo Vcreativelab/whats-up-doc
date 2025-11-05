@@ -10,8 +10,10 @@ import streamlit as st
 from datetime import datetime
 from core.config import CACHE_TTL
 import re
+import logging
 
-# --- Initialize caches ---
+
+# --- Initialize caches and logger ---
 BASE_DIR = os.getcwd()
 CACHE_DIR = os.path.join(BASE_DIR, "medical_cache")
 TRANSLATION_CACHE_DIR = os.path.join(BASE_DIR, "translation_cache")
@@ -20,6 +22,7 @@ BACK_TRANSLATION_CACHE_DIR = os.path.join(BASE_DIR, "back_translation_cache")
 cache = dc.Cache(CACHE_DIR)
 translation_cache = dc.Cache(TRANSLATION_CACHE_DIR)
 back_translation_cache = dc.Cache(BACK_TRANSLATION_CACHE_DIR)
+logger = logging.getLogger(__name__)
 
 # --- Utilities ---
 def clear_all_caches():
@@ -42,7 +45,11 @@ def get_cached_result(cache_obj, key: str):
     if key in cache_obj:
         data = cache_obj[key]
         ts = data.get("timestamp", "unknown")
-        st.info(f"🔁 Using cached results for '{key}' (last updated {ts}).")
+        msg = f"🔁 Using cached results for '{key}' (last updated {ts})."
+        try:
+            st.info(msg)
+        except Exception:
+            logger.info(msg)  # fallback if Streamlit isn't active
         return data["results"]
     return None
 
