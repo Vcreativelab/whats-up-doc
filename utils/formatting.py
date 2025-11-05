@@ -21,8 +21,12 @@ def format_sources(sources: dict) -> str:
     return "\n\n".join(lines)
 
 def format_markdown_response(response: str) -> str:
-    """Ensure consistent Markdown rendering."""
+    """
+    Ensure consistent Markdown rendering for generic LLM responses.
+    Currently unused by medical_agent (which has its own formatting).
+    """
     response = response.strip()
     if not any(response.startswith(p) for p in ("**Question:**", "**Response:**", "**Answer:**")):
         response = f"**Response:**\n\n{response}"
     return response
+
