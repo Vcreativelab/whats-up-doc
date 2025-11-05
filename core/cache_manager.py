@@ -22,7 +22,10 @@ BACK_TRANSLATION_CACHE_DIR = os.path.join(BASE_DIR, "back_translation_cache")
 cache = dc.Cache(CACHE_DIR)
 translation_cache = dc.Cache(TRANSLATION_CACHE_DIR)
 back_translation_cache = dc.Cache(BACK_TRANSLATION_CACHE_DIR)
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+)
 
 # --- Utilities ---
 def clear_all_caches():
@@ -31,13 +34,14 @@ def clear_all_caches():
         cache.clear()
         translation_cache.clear()
         back_translation_cache.clear()
+        logger.info("All caches cleared via sidebar button.")
         st.success("✅ All caches cleared successfully!")
 
 def cache_result(cache_obj, key: str, data: dict):
-    """Store a result in cache with timestamp and TTL."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     wrapped = {"timestamp": timestamp, "results": data}
     cache_obj.set(key, wrapped, expire=CACHE_TTL)
+    logger.info(f"🗂️ Cached new result for key '{key}' at {timestamp}.")
     return wrapped
 
 def get_cached_result(cache_obj, key: str):
