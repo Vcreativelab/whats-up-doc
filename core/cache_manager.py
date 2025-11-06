@@ -22,10 +22,14 @@ BACK_TRANSLATION_CACHE_DIR = os.path.join(BASE_DIR, "back_translation_cache")
 cache = dc.Cache(CACHE_DIR)
 translation_cache = dc.Cache(TRANSLATION_CACHE_DIR)
 back_translation_cache = dc.Cache(BACK_TRANSLATION_CACHE_DIR)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
+
+logger = logging.getLogger(__name__)
+
 
 # --- Utilities ---
 def clear_all_caches():
@@ -51,7 +55,7 @@ def get_cached_result(cache_obj, key: str):
         ts = data.get("timestamp", "unknown")
         msg = f"🔁 Using cached results for '{key}' (last updated {ts})."
         try:
-            st.info(msg)
+            st.caption(msg)
         except Exception:
             logger.info(msg)  # fallback if Streamlit isn't active
         return data["results"]
