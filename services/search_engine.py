@@ -48,12 +48,12 @@ def medical_search(query: str):
         return cached
 
     # Indicate live search
-    st.info(f"🌐 Searching verified sources for: **{query}**")
+    st.caption(f"🌐 Searching verified sources for: **{query}**")
 
     results = {}
     for src in SAFE_SOURCES:
         try:
-            st.info(f"🔎 Searching {src} ...")
+            st.caption(f"🔎 Searching {src} ...")
             res = search_engine.run(f"site:{src} {query}")
             if res:
                 results[src] = truncate_snippet(res)
