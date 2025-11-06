@@ -14,8 +14,23 @@ from utils.formatting import format_sources
 
 def should_search(input_text: str) -> bool:
     """Determine if the question requires external medical search."""
-    pattern = r"\b(treat(ment)?|symptom(s)?|drug(s)?|medication(s)?|cause(s)?|prevent(ion)?|diagnos(e|is)|test(s)?|therapy|dose|prescrib(e|ed|ing))\b"
-    return bool(re.search(pattern, input_text.lower()))
+    expanded_pattern = (
+        r"\b("
+        r"treat|treatment|"
+        r"manage|management|"
+        r"control|controlled|"
+        r"symptom|symptoms|"
+        r"drug|drugs|medicine|medication|"
+        r"cause|causes|"
+        r"prevent|prevention|"
+        r"diagnosis|diagnose|"
+        r"test|tests|"
+        r"therapy|therapies|"
+        r"dose|dosing|"
+        r"prescribe|prescribed|prescribing"
+        r")\b"
+    )
+    return bool(re.search(expanded_pattern, input_text.lower()))
 
 
 def route(input_text: str) -> str:
