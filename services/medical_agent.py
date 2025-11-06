@@ -113,12 +113,14 @@ def get_medical_answer(query: str) -> str:
             final_response = clean_response_text(final_response)
 
         # Step 6: Translate back only if original language is not English
-        is_english = user_lang.lower().startswith("en")
+        normalized_lang = user_lang.strip().lower().replace("-", "")
+        is_english = normalized_lang.startswith("en")
+        
         if not is_english:
             st.success(f"🌍 Translation completed ({user_lang} → English → {user_lang}).")
             translated_back = translate_back_to_original_language(final_response, user_lang)
             final_response = f"*Translated from English to {user_lang}*\n\n{translated_back}"
-        
+ 
 
     except Exception as e:
         st.error(f"⚠️ Error generating answer: {e}")
