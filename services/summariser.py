@@ -5,6 +5,7 @@ Summarises multi-source medical search results into clear, concise Markdown,
 with built-in cleanup for disclaimers and formatting.
 """
 
+from core.config import DEFAULT_GEMINI_MODEL
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -44,7 +45,7 @@ Format your entire answer in Markdown.
 # --------------------------------
 summarise_runnable = (
     summarise_prompt
-    | ChatGoogleGenerativeAI(model="models/gemini-2.0-flash", temperature=0.0)
+    | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0.0)
     | StrOutputParser()
 )
 
