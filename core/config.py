@@ -17,9 +17,15 @@ st.set_page_config(page_title="What's up Doc? 🤖🩺")
 # Global Constants
 # -----------------------
 RATE_LIMIT_SECONDS = 60
-MAX_TOKENS_PER_MINUTE = 10_000_000
+MAX_TOKENS_PER_MINUTE = 80_000
 CACHE_TTL = 60 * 60 * 24 * 7  # 7 days
 
+# -----------------------
+# LLM Model Configuration
+# -----------------------
+DEFAULT_GEMINI_MODEL = "models/gemini-2.5-flash-lite"
+# Fallback if needed:
+FALLBACK_GEMINI_MODEL = "models/gemini-2.5-flash"
 # -----------------------
 # API Key Handling
 # -----------------------
