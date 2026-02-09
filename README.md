@@ -158,18 +158,18 @@ GOOGLE_API_KEY = "your_api_key_here"
 ---
 
 ## 🚀 Usage
-1. Enter a medical question (in any language).
+**1.** Enter a medical question (in any language).
 
-2. The app will:
-  - Detect the language
+**2.** The app will:
+- Detect the language
+
+- Translate to English (if needed)
+
+- Generate or summarise a medical answer
+
+- Translate back to your language (if needed)
   
-  - Translate to English (if needed)
-  
-  - Generate or summarise a medical answer
-  
-  - Translate back to your language (if needed)
-  
-3. Read the structured, Markdown-formatted response.
+**3.** Read the structured, Markdown-formatted response.
 
 ---
 
@@ -182,5 +182,5 @@ This application:
   
   - Does not replace professional medical advice
 
-All responses are for educational purposes only.
-Always consult a qualified healthcare professional for medical concerns.
+**All responses are for educational purposes only.
+Always consult a qualified healthcare professional for medical concerns.**
