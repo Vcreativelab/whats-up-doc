@@ -13,7 +13,7 @@ from langchain.schema import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from core.cache_manager import translation_cache, back_translation_cache
-from core.config import CACHE_TTL
+from core.config import CACHE_TTL, DEFAULT_GEMINI_MODEL
 
 
 def detect_and_translate(query: str) -> dict:
@@ -31,7 +31,7 @@ def detect_and_translate(query: str) -> dict:
 
     translator_chain = (
         translator_prompt
-        | ChatGoogleGenerativeAI(model="models/gemini-2.0-flash", temperature=0)
+        | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0)
         | StrOutputParser()
     )
 
