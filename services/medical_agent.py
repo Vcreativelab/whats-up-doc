@@ -10,6 +10,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser, AIMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from core.config import DEFAULT_GEMINI_MODEL
 from core.rate_limiter import is_rate_limited
 from services.translator import detect_and_translate, translate_back_to_original_language
 from services.router import router_chain
@@ -53,7 +54,7 @@ Use the user’s context to maintain conversational flow.
 # Runnable pipeline: prompt → Gemini model → plain text output
 medical_runnable = (
     medical_prompt
-    | ChatGoogleGenerativeAI(model="models/gemini-2.0-flash", temperature=0.0)
+    | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0.0)
     | StrOutputParser()
 )
 
