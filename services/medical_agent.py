@@ -112,8 +112,6 @@ def get_medical_answer(query: str) -> str:
 
 📚 **Sources referenced:**
 {format_sources(sources)}
-
-⚠️ *This information is for educational purposes only and should not replace professional medical advice.*
 """
 
         # Step 5: Handle direct LLM answer
@@ -140,10 +138,6 @@ def get_medical_answer(query: str) -> str:
 
 **Answer:**
 {english_response}
-
----
-
-⚠️ *This information is for educational purposes only and should not replace professional medical advice.*
 """
             final_response = clean_response_text(final_response)
 
