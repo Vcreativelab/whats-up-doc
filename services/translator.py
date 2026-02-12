@@ -1,113 +1,100 @@
 """
-services/translator.py
+services/summariser.py
 
-Handles automatic language detection, translation to/from English,
-and translation caching for multilingual support.
+Summarises multi-source medical search results into clear, concise Markdown,
+with enforced source grounding and citation.
 """
 
 import re
-import json
-import streamlit as st
+from core.config import DEFAULT_GEMINI_MODEL
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langdetect import detect, LangDetectException
-
-from core.cache_manager import translation_cache, back_translation_cache
-from core.config import CACHE_TTL, DEFAULT_GEMINI_MODEL
+from utils.formatting import clean_response_text
 
 
-def detect_language_local(text: str) -> str:
-    """Detect language using local library (no API cost)."""
+# --------------------------------
+# Prompt Definition
+# --------------------------------
+summarise_prompt = ChatPromptTemplate.from_template("""
+You are a **medical summarisation assistant**.
+
+You will be given multiple medical sources, each with an ID.
+
+Your task:
+- Write a **concise, evidence-based summary** in Markdown.
+- Use **bullet points** grouped under clear headings (e.g. Overview, Causes, Symptoms, Treatment).
+- **Every bullet point MUST end with at least one citation** like: (Source 1) or (Source 1, Source 3)
+- **Only use the provided sources. Do NOT invent sources.**
+- If multiple sources say the same thing, merge them and cite all relevant sources.
+- Be neutral, factual, and medical.
+- End with **exactly one disclaimer** reminding users to consult a doctor.
+
+---
+
+**Sources:**
+{sources}
+
+**User question:**
+{question}
+
+Format your entire answer in Markdown.
+""")
+
+
+# --------------------------------
+# Runnable Chain
+# --------------------------------
+summarise_runnable = (
+    summarise_prompt
+    | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0.0)
+    | StrOutputParser()
+)
+
+
+# --------------------------------
+# Helpers
+# --------------------------------
+def format_sources_for_prompt(sources: dict) -> str:
+    """
+    Turn {domain: snippet} into numbered sources for the LLM.
+    """
+    blocks = []
+    for i, (domain, snippet) in enumerate(sources.items(), start=1):
+        snippet = str(snippet).strip()
+        blocks.append(
+            f"[Source {i}]\n"
+            f"Website: {domain}\n"
+            f"Content: {snippet}"
+        )
+    return "\n\n".join(blocks)
+
+
+# --------------------------------
+# Main Function
+# --------------------------------
+def summarise_medical_sources(sources: dict, question: str) -> str:
+    """
+    Generate a cleaned, evidence-based medical summary with enforced citations.
+    """
     try:
-        return detect(text)
-    except LangDetectException:
-        return "unknown"
+        if not sources or not isinstance(sources, dict):
+            return "⚠️ No valid sources available to summarise."
 
+        formatted_sources = format_sources_for_prompt(sources)
 
-def detect_and_translate(query: str) -> dict:
-    """Detect language and translate non-English input to English."""
-    query_key = query.strip().lower()
-    if query_key in translation_cache:
-        return translation_cache[query_key]
+        raw_summary = summarise_runnable.invoke({
+            "sources": formatted_sources,
+            "question": question
+        })
 
-    # 1) Local language detection (cheap, fast, no tokens)
-    detected_lang = detect_language_local(query)
+        cleaned = clean_response_text(raw_summary)
 
-    # Normalize language code
-    normalized_lang = detected_lang.lower().replace("-", "")
+        # Light validation: ensure at least one citation exists
+        if not re.search(r"\(Source\s+\d+", cleaned):
+            cleaned += "\n\n⚠️ *Warning: Sources could not be reliably cited in this summary.*"
 
-    # 2) If already English → skip translation entirely
-    if normalized_lang.startswith("en"):
-        data = {"language": detected_lang, "translation": query}
-        translation_cache[query_key] = data
-        translation_cache.expire(query_key, CACHE_TTL)
-        return data
-
-    # 3) Otherwise, translate to English with LLM
-    translator_prompt = ChatPromptTemplate.from_template("""
-    You are a translation assistant.
-    Translate the following text into English.
-    Return ONLY the translated text, no explanations.
-
-    Text:
-    {text}
-    """)
-
-    translator_chain = (
-        translator_prompt
-        | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0)
-        | StrOutputParser()
-    )
-
-    translation = query  # fallback
-
-    try:
-        translation = translator_chain.invoke({"text": query}).strip()
-    except Exception as e:
-        st.warning(f"⚠️ Translation step failed: {e}")
-
-    data = {"language": detected_lang, "translation": translation}
-    translation_cache[query_key] = data
-    translation_cache.expire(query_key, CACHE_TTL)
-    return data
-
-
-def translate_back_to_original_language(text: str, target_lang: str) -> str:
-    """Translate English text back to user’s original language."""
-    if not target_lang or target_lang.lower().startswith("en"):
-        return text
-
-    cache_key = f"{target_lang.lower()}::{text.strip()}"
-    if cache_key in back_translation_cache:
-        return back_translation_cache[cache_key]
-
-    translator_back_prompt = ChatPromptTemplate.from_template("""
-    You are a translation assistant.
-    Translate the following English text into the language specified below.
-    Preserve meaning, tone, and Markdown formatting.
-
-    Target language: {target_lang}
-    Text to translate:
-    {text}
-    """)
-
-    translator_back_chain = (
-        translator_back_prompt
-        | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0)
-        | StrOutputParser()
-    )
-
-    try:
-        translated = translator_back_chain.invoke({
-            "target_lang": target_lang,
-            "text": text
-        }).strip()
-
-        back_translation_cache[cache_key] = translated
-        back_translation_cache.expire(cache_key, CACHE_TTL)
-        return translated
+        return cleaned
 
     except Exception as e:
-        st.warning(f"⚠️ Back-translation failed: {e}")
-        return text
+        return f"⚠️ Failed to summarise sources: {e}"
