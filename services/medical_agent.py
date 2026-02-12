@@ -1,3 +1,4 @@
+import streamlit as st
 from core.config import DEFAULT_GEMINI_MODEL, FALLBACK_GEMINI_MODEL
 from utils.formatting import clean_response_text, format_sources
 from langchain_google_genai import ChatGoogleGenerativeAI
