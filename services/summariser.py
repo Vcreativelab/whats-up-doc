@@ -40,7 +40,6 @@ Your task:
 Format your entire answer in Markdown.
 """)
 
-
 # --------------------------------
 # Runnable Chain
 # --------------------------------
@@ -54,20 +53,23 @@ summarise_runnable = (
 # --------------------------------
 # Helpers
 # --------------------------------
-def format_sources_for_prompt(sources: list) -> str:
-    """Turn structured sources into a numbered block for the LLM."""
+def format_sources_for_prompt(sources: dict) -> str:
+    """
+    Turn {domain: snippet} into numbered sources for the LLM.
+    """
     blocks = []
-    for i, src in enumerate(sources, start=1):
-        title = src.get("title", "Untitled")
-        snippet = src.get("snippet", "")
-        blocks.append(f"[Source {i}]\nTitle: {title}\nContent: {snippet}")
+    for i, (domain, snippet) in enumerate(sources.items(), start=1):
+        blocks.append(
+            f"[Source {i}]\n"
+            f"Website: {domain}\n"
+            f"Content: {snippet}"
+        )
     return "\n\n".join(blocks)
-
 
 # --------------------------------
 # Main Function
 # --------------------------------
-def summarise_medical_sources(sources: list, question: str) -> str:
+def summarise_medical_sources(sources: dict, question: str) -> str:
     """
     Generate a cleaned, evidence-based medical summary with enforced citations.
     """
@@ -81,7 +83,7 @@ def summarise_medical_sources(sources: list, question: str) -> str:
 
         cleaned = clean_response_text(raw_summary)
 
-        # Optional: light validation — ensure at least one citation exists
+        # Light validation: ensure at least one citation exists
         if "(Source" not in cleaned:
             cleaned += "\n\n⚠️ *Warning: Sources could not be reliably cited in this summary.*"
 
