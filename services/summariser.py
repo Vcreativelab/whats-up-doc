@@ -2,7 +2,7 @@
 services/summariser.py
 
 Summarises multi-source medical search results into clear, concise Markdown,
-with built-in cleanup for disclaimers and formatting.
+with enforced source grounding and citation.
 """
 
 from core.config import DEFAULT_GEMINI_MODEL
@@ -18,19 +18,20 @@ from utils.formatting import clean_response_text
 summarise_prompt = ChatPromptTemplate.from_template("""
 You are a **medical summarisation assistant**.
 
-Your goal is to produce a concise, evidence-based summary of verified medical search results.
+You will be given multiple medical sources, each with an ID.
 
-**Guidelines:**
-- Use **short Markdown bullet points** for each key fact.
-- Include the **source name in parentheses** for each point.
-- Focus on **definitions, causes, symptoms, and treatments/medications**.
-- Combine overlapping facts and avoid repetition.
-- Write neutrally and factually — do not speculate.
-- End with a **single disclaimer** reminding users to consult a doctor.
+Your task:
+- Write a **concise, evidence-based summary** in Markdown.
+- Use **bullet points** grouped under clear headings (e.g. Overview, Causes, Symptoms, Treatment).
+- **Every bullet point MUST end with at least one citation** like: (Source 1) or (Source 1, Source 3)
+- **Only use the provided sources. Do NOT invent sources.**
+- If multiple sources say the same thing, merge them and cite all relevant sources.
+- Be neutral, factual, and medical.
+- End with **exactly one disclaimer** reminding users to consult a doctor.
 
 ---
 
-**Collected medical information from verified sources:**
+**Sources:**
 {sources}
 
 **User question:**
@@ -51,19 +52,40 @@ summarise_runnable = (
 
 
 # --------------------------------
-# Helper Function
+# Helpers
 # --------------------------------
-def summarise_medical_sources(sources: str, question: str) -> str:
+def format_sources_for_prompt(sources: list) -> str:
+    """Turn structured sources into a numbered block for the LLM."""
+    blocks = []
+    for i, src in enumerate(sources, start=1):
+        title = src.get("title", "Untitled")
+        snippet = src.get("snippet", "")
+        blocks.append(f"[Source {i}]\nTitle: {title}\nContent: {snippet}")
+    return "\n\n".join(blocks)
+
+
+# --------------------------------
+# Main Function
+# --------------------------------
+def summarise_medical_sources(sources: list, question: str) -> str:
     """
-    Generate a cleaned, evidence-based medical summary.
-    Ensures consistent formatting and single disclaimer.
+    Generate a cleaned, evidence-based medical summary with enforced citations.
     """
     try:
+        formatted_sources = format_sources_for_prompt(sources)
+
         raw_summary = summarise_runnable.invoke({
-            "sources": sources,
+            "sources": formatted_sources,
             "question": question
         })
+
         cleaned = clean_response_text(raw_summary)
+
+        # Optional: light validation — ensure at least one citation exists
+        if "(Source" not in cleaned:
+            cleaned += "\n\n⚠️ *Warning: Sources could not be reliably cited in this summary.*"
+
         return cleaned
+
     except Exception as e:
         return f"⚠️ Failed to summarise sources: {e}"
