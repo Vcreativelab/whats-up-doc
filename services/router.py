@@ -16,6 +16,7 @@ def should_search(input_text: str) -> bool:
     """Determine if the question requires external medical search."""
     expanded_pattern = (
         r"\b("
+        r"what is|what are|define|definition|explain|overview|"
         r"treat|treatment|"
         r"manage|management|"
         r"control|controlled|"
