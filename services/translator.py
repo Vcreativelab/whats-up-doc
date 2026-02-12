@@ -19,6 +19,10 @@ from core.config import CACHE_TTL, DEFAULT_GEMINI_MODEL
 
 def detect_language_local(text: str) -> str:
     """Detect language using local library (no API cost)."""
+    text = text.strip()
+    if len(text) < 5:
+        return "en"  # assume English for very short inputs
+
     try:
         return detect(text)
     except LangDetectException:
