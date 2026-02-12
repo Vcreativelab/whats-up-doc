@@ -85,6 +85,11 @@ def get_medical_answer(query: str) -> str:
 
         # Step 2: Initialise short-term memory
         memory = init_memory()
+        # 🔧 Enrich very short follow-up queries using conversation history
+        if len(translated_query.split()) < 5 and memory.chat_memory.messages:
+            last_user_msg = memory.chat_memory.messages[-1].content
+            translated_query = f"{translated_query} (about: {last_user_msg})"
+
         context = {"input": translated_query, "history": memory.chat_memory.messages}
 
         # Step 3: Route intelligently
