@@ -5,6 +5,7 @@ Summarises multi-source medical search results into clear, concise Markdown,
 with enforced source grounding and citation.
 """
 
+import re
 from core.config import DEFAULT_GEMINI_MODEL
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
@@ -40,6 +41,7 @@ Your task:
 Format your entire answer in Markdown.
 """)
 
+
 # --------------------------------
 # Runnable Chain
 # --------------------------------
@@ -59,12 +61,14 @@ def format_sources_for_prompt(sources: dict) -> str:
     """
     blocks = []
     for i, (domain, snippet) in enumerate(sources.items(), start=1):
+        snippet = str(snippet).strip()
         blocks.append(
             f"[Source {i}]\n"
             f"Website: {domain}\n"
             f"Content: {snippet}"
         )
     return "\n\n".join(blocks)
+
 
 # --------------------------------
 # Main Function
@@ -74,6 +78,9 @@ def summarise_medical_sources(sources: dict, question: str) -> str:
     Generate a cleaned, evidence-based medical summary with enforced citations.
     """
     try:
+        if not sources or not isinstance(sources, dict):
+            return "⚠️ No valid sources available to summarise."
+
         formatted_sources = format_sources_for_prompt(sources)
 
         raw_summary = summarise_runnable.invoke({
@@ -84,7 +91,7 @@ def summarise_medical_sources(sources: dict, question: str) -> str:
         cleaned = clean_response_text(raw_summary)
 
         # Light validation: ensure at least one citation exists
-        if "(Source" not in cleaned:
+        if not re.search(r"\(Source\s+\d+", cleaned):
             cleaned += "\n\n⚠️ *Warning: Sources could not be reliably cited in this summary.*"
 
         return cleaned
