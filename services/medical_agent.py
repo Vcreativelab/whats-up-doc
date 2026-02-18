@@ -4,10 +4,8 @@ services/medical_agent.py
 Main medical response generation logic — orchestrates translation,
 routing, summarisation, and model responses.
 
-This layer does NOT format responses.
+UI-independent service layer.
 """
-
-import streamlit as st
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
@@ -75,20 +73,33 @@ fallback_runnable = (
 # --------------------------------
 # Main Entry Point
 # --------------------------------
-def get_medical_answer(query: str) -> str:
-    """Generate multilingual, evidence-based medical response."""
+def get_medical_answer(query: str, debug: bool = False) -> dict:
+    """
+    Generate multilingual, evidence-based medical response.
 
-    debug_mode = st.sidebar.checkbox("Show debug info", value=False)
+    Returns structured output:
+    {
+        "answer": str,
+        "route": str,
+        "language": str,
+        "error": Optional[str],
+        "debug_info": Optional[dict]
+    }
+    """
 
-    if debug_mode:
-        st.info(f"🧩 Processing query: {query[:120]}")
+    debug_info = {}
 
     # ----------------------------
     # Rate limiting
     # ----------------------------
     tokens_this_request = max(len(query) // 4, 1)
     if is_rate_limited(tokens_this_request):
-        return "⚠️ Rate limit exceeded. Please wait a bit."
+        return {
+            "answer": "⚠️ Rate limit exceeded. Please wait a bit.",
+            "route": None,
+            "language": None,
+            "error": "rate_limited",
+        }
 
     try:
         # ----------------------------
@@ -99,6 +110,10 @@ def get_medical_answer(query: str) -> str:
         translated_query = lang_info["translation"].strip()
 
         is_english = user_lang.lower().replace("-", "").startswith("en")
+
+        if debug:
+            debug_info["detected_language"] = user_lang
+            debug_info["translated_query"] = translated_query
 
         # ----------------------------
         # 2️⃣ Memory
@@ -119,13 +134,15 @@ def get_medical_answer(query: str) -> str:
         # ----------------------------
         routed = router_chain.invoke(context)
 
-        if debug_mode:
-            st.success(f"✅ Routed via: {routed.get('route')}")
+        route_type = routed.get("route")
+
+        if debug:
+            debug_info["route"] = route_type
 
         # ----------------------------
         # 4️⃣ Generate Response
         # ----------------------------
-        if routed.get("route") == "search":
+        if route_type == "search":
 
             english_response = summarise_medical_sources(
                 routed.get("documents"),
@@ -139,7 +156,6 @@ def get_medical_answer(query: str) -> str:
                     "input": routed.get("question", "")
                 })
             except Exception:
-                st.warning("⚠️ Primary model failed, using fallback model.")
                 english_response = fallback_runnable.invoke({
                     "history": routed.get("history", []),
                     "input": routed.get("question", "")
@@ -163,8 +179,18 @@ def get_medical_answer(query: str) -> str:
                 f"{translated_back}"
             )
 
-        return final_response.strip()
+        return {
+            "answer": final_response.strip(),
+            "route": route_type,
+            "language": user_lang,
+            "error": None,
+            "debug_info": debug_info if debug else None,
+        }
 
     except Exception as e:
-        st.error(f"⚠️ Error generating answer: {e}")
-        return f"⚠️ Failed to generate an answer: {e}"
+        return {
+            "answer": f"⚠️ Failed to generate an answer: {e}",
+            "route": None,
+            "language": None,
+            "error": str(e),
+        }
