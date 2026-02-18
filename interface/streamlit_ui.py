@@ -20,6 +20,8 @@ def show_ui():
 
         k_value = st.number_input("K value", min_value=1, max_value=10, value=3)
 
+        debug_mode = st.checkbox("Show debug info", value=False)
+
         gemini_api_key = get_gemini_api_key()
 
         if st.button("🧹 Clear Cache"):
@@ -54,7 +56,7 @@ def show_ui():
 
         with st.spinner("🧠 Processing your question..."):
             try:
-                answer = get_medical_answer(user_query)
+                result = get_medical_answer(user_query, debug=debug_mode)
             except Exception as e:
                 gif_placeholder.empty()
                 st.error(f"⚠️ get_medical_answer failed: {e}")
@@ -62,18 +64,24 @@ def show_ui():
 
         gif_placeholder.empty()
 
-        # Render markdown cleanly
-        st.markdown(answer)
+        # Display answer
+        st.markdown(result["answer"])
+
+        # Optional debug output
+        if debug_mode and result.get("debug_info"):
+            with st.expander("🔍 Debug Info", expanded=False):
+                st.json(result["debug_info"])
 
         # Store in memory
         memory.chat_memory.add_message(HumanMessage(content=user_query))
-        memory.chat_memory.add_message(AIMessage(content=answer))
+        memory.chat_memory.add_message(AIMessage(content=result["answer"]))
 
     # ----------------------------
     # Chat History
     # ----------------------------
     if st.session_state.memory and hasattr(st.session_state.memory, "chat_memory"):
         with st.expander("🩺 View Chat History", expanded=False):
+
             history_md = ""
 
             for msg in st.session_state.memory.chat_memory.messages[-10:]:
