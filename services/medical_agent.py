@@ -3,6 +3,8 @@ services/medical_agent.py
 
 Main medical response generation logic — orchestrates translation,
 routing, summarisation, and model responses.
+
+This layer does NOT format responses.
 """
 
 import streamlit as st
@@ -20,17 +22,18 @@ from services.translator import (
     translate_back_to_original_language,
 )
 from services.router import router_chain
+from services.summariser import summarise_medical_sources
 
 from utils.formatting import clean_response_text
 
 
 # --------------------------------
-# Prompt Definition
+# Prompt Definition (Direct LLM)
 # --------------------------------
 medical_prompt = ChatPromptTemplate.from_template("""
 You are **DocBot**, a multilingual, evidence-based medical assistant.
 
-Your role is to provide **clear, structured, and informative explanations**
+Your role is to provide clear, structured, and informative explanations
 for medical questions.
 
 Your tone should be:
@@ -44,7 +47,7 @@ Rules:
   (e.g. "### Overview", "### Causes", "### Symptoms", "### Treatment").
 - Include relevant clinical context when appropriate.
 - Avoid speculation and off-label drug advice.
-- End with a single disclaimer reminding users to consult a healthcare professional.
+- End with exactly one disclaimer reminding users to consult a healthcare professional.
 
 ---
 
@@ -56,9 +59,6 @@ User question:
 """)
 
 
-# --------------------------------
-# Model Pipelines
-# --------------------------------
 primary_runnable = (
     medical_prompt
     | ChatGoogleGenerativeAI(model=DEFAULT_GEMINI_MODEL, temperature=0.0)
@@ -83,7 +83,9 @@ def get_medical_answer(query: str) -> str:
     if debug_mode:
         st.info(f"🧩 Processing query: {query[:120]}")
 
+    # ----------------------------
     # Rate limiting
+    # ----------------------------
     tokens_this_request = max(len(query) // 4, 1)
     if is_rate_limited(tokens_this_request):
         return "⚠️ Rate limit exceeded. Please wait a bit."
@@ -125,13 +127,10 @@ def get_medical_answer(query: str) -> str:
         # ----------------------------
         if routed.get("route") == "search":
 
-            summary = clean_response_text(routed.get("summary", ""))
-
-            final_response = f"""### Question
-{query}
-
-{summary}
-"""
+            english_response = summarise_medical_sources(
+                routed.get("documents"),
+                routed.get("question"),
+            )
 
         else:
             try:
@@ -146,22 +145,19 @@ def get_medical_answer(query: str) -> str:
                     "input": routed.get("question", "")
                 })
 
-            english_response = clean_response_text(english_response)
-
-            final_response = f"""### Question
-{query}
-
-{english_response}
-"""
+        english_response = clean_response_text(english_response)
 
         # ----------------------------
-        # 5️⃣ Translate Back
+        # 5️⃣ Translate Back (if needed)
         # ----------------------------
+        final_response = english_response
+
         if not is_english:
             translated_back = translate_back_to_original_language(
-                final_response,
+                english_response,
                 user_lang
             )
+
             final_response = (
                 f"*Translated from English to {user_lang}*\n\n"
                 f"{translated_back}"
