@@ -5,7 +5,6 @@ Performs cached searches on verified medical websites using DuckDuckGo.
 """
 
 import streamlit as st
-from datetime import datetime
 from langchain.tools import StructuredTool
 from langchain_community.tools import DuckDuckGoSearchRun
 from core.cache_manager import cache, cache_result, get_cached_result, normalize_query_key
@@ -24,6 +23,19 @@ SAFE_SOURCES = [
     "clevelandclinic.org",
 ]
 
+BAD_SNIPPET_PATTERNS = [
+    "site owner hides",
+    "enable javascript",
+    "enable cookies",
+    "cookie policy",
+    "privacy policy",
+    "subscribe",
+    "sign in",
+    "log in",
+    "404",
+    "not found",
+]
+
 
 # --------------------------------
 # Helper
@@ -34,6 +46,22 @@ def truncate_snippet(snippet: str) -> str:
     if len(snippet) > MAX_SNIPPET_LEN:
         snippet = snippet[:MAX_SNIPPET_LEN].rsplit(" ", 1)[0] + "..."
     return snippet
+
+def is_bad_snippet(snippet: str) -> bool:
+    if not snippet:
+        return True
+
+    s = snippet.lower().strip()
+
+    if len(s) < 50:  # too short to be useful
+        return True
+
+    for bad in BAD_SNIPPET_PATTERNS:
+        if bad in s:
+            return True
+
+    return False
+
 
 # --------------------------------
 # Core Search
@@ -51,27 +79,37 @@ def medical_search(query: str):
     st.caption(f"🌐 Searching verified sources for: **{query}**")
 
     results = {}
+
     for src in SAFE_SOURCES:
         try:
             st.caption(f"🔎 Searching {src} ...")
+
             res = search_engine.run(f"site:{src} {query}")
-            if res:
-                results[src] = truncate_snippet(res)
-                st.success(f"✅ Results found from {src}")
-            else:
+
+            if not res:
                 st.warning(f"⚠️ No content returned from {src}")
+                continue
+
+            snippet = truncate_snippet(res)
+
+            if is_bad_snippet(snippet):
+                st.warning(f"⚠️ Ignored low-quality snippet from {src}")
+                continue
+
+            results[src] = snippet
+            st.success(f"✅ Results found from {src}")
+
         except Exception as e:
-            results[src] = f"Search failed ({e})"
             st.error(f"❌ Error searching {src}: {e}")
 
-    # Save to cache
-    cache_result(cache, query_key, results)
-
-    if not results:
-        st.warning(f"⚠️ No results found for '{query}'")
+    # Save to cache only if useful results exist
+    if results:
+        cache_result(cache, query_key, results)
+    else:
+        st.warning(f"⚠️ No high-quality results found for '{query}'")
 
     return results
-    
+   
 
 # --------------------------------
 # Tool registration
