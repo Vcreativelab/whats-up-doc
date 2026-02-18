@@ -2,23 +2,26 @@
 services/router.py
 
 Routing logic: decides whether a user query should trigger
-a search-based summarisation or direct LLM response.
-Returns structured data instead of pre-formatted text.
+a search-based response or direct LLM response.
+
+Returns structured raw data only — no summarisation or formatting.
 """
 
 import re
 from langchain_core.runnables import RunnableLambda, RunnableBranch
-from services.summariser import summarise_medical_sources
 from services.search_engine import medical_search
 
 
+# --------------------------------
+# Search Decision Logic
+# --------------------------------
 def should_search(input_text: str) -> bool:
-    """Determine if the question requires external medical search."""
+    """Determine if the question likely requires external medical search."""
+
     expanded_pattern = (
         r"\b("
         r"what is|what are|define|definition|explain|overview|"
-        r"treat|treatment|"
-        r"manage|management|"
+        r"treat|treatment|manage|management|"
         r"control|controlled|"
         r"symptom|symptoms|"
         r"drug|drugs|medicine|medication|"
@@ -31,41 +34,32 @@ def should_search(input_text: str) -> bool:
         r"prescribe|prescribed|prescribing"
         r")\b"
     )
+
     return bool(re.search(expanded_pattern, input_text.lower()))
 
 
 def route(input_text: str) -> str:
-    """Return 'search' or 'no_search' depending on query type."""
-    return "search" if should_search(input_text) else "no_search"
+    """Return 'search' or 'direct' depending on query type."""
+    return "search" if should_search(input_text) else "direct"
 
 
-def enrich_with_question_and_history(prev, original):
-    return {
-        "sources": prev,
-        "question": original["input"],
-        "history": original.get("history", []),
-    }
-
-
-def summarise_with_sources(data):
-    summary = summarise_medical_sources(data["sources"], data["question"])
-    return {
+# --------------------------------
+# Search Branch (NO summarisation)
+# --------------------------------
+search_branch = RunnableLambda(
+    lambda x: {
         "route": "search",
-        "question": data["question"],
-        "summary": summary,
-        "sources": data["sources"],
-        "history": data.get("history", []),
+        "question": x["input"],
+        "history": x.get("history", []),
+        "documents": medical_search(x["input"]),  # raw documents only
     }
-
-
-search_branch = (
-    RunnableLambda(lambda x: {"input": x["input"], "history": x.get("history", [])})
-    | RunnableLambda(lambda x: {"results": medical_search(x["input"]), "original": x})
-    | RunnableLambda(lambda d: enrich_with_question_and_history(d["results"], d["original"]))
-    | RunnableLambda(lambda d: summarise_with_sources(d))
 )
 
-no_search_branch = RunnableLambda(
+
+# --------------------------------
+# Direct LLM Branch
+# --------------------------------
+direct_branch = RunnableLambda(
     lambda x: {
         "route": "direct",
         "question": x["input"],
@@ -73,7 +67,11 @@ no_search_branch = RunnableLambda(
     }
 )
 
+
+# --------------------------------
+# Router Chain
+# --------------------------------
 router_chain = RunnableBranch(
     (lambda x: route(x["input"]) == "search", search_branch),
-    no_search_branch
+    direct_branch,
 )
