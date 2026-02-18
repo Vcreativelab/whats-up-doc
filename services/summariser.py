@@ -12,6 +12,12 @@ from langchain.schema import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from utils.formatting import clean_response_text
 
+REQUIRED_HEADINGS = [
+    "Overview",
+    "Symptoms",
+    "Treatment",
+]
+
 
 # --------------------------------
 # Prompt Definition
@@ -70,6 +76,57 @@ def format_sources_for_prompt(sources: dict) -> str:
     return "\n\n".join(blocks)
 
 
+def ensure_required_headings(text: str) -> str:
+    existing_headings = re.findall(r"^##\s+(.+)", text, flags=re.MULTILINE)
+    existing_lower = [h.lower().strip() for h in existing_headings]
+
+    for heading in REQUIRED_HEADINGS:
+        if heading.lower() not in existing_lower:
+            text += (
+                f"\n\n## {heading}\n"
+                "- Information not clearly available in the provided sources. ⚠️ *(No source cited)*"
+            )
+
+    return text
+
+
+def validate_bullet_citations(text: str) -> str:
+    lines = text.splitlines()
+    validated_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        if re.match(r"^[-*•]\s+", stripped):
+            if not re.search(r"\(Source\s+\d+(?:,\s*Source\s+\d+)*\)", stripped):
+                stripped += " ⚠️ *(No source cited)*"
+
+        validated_lines.append(stripped)
+
+    return "\n".join(validated_lines)
+
+STANDARD_DISCLAIMER = (
+    "⚠️ *This information is for educational purposes only and does not "
+    "replace professional medical advice. Please consult a doctor.*"
+)
+
+
+def enforce_single_disclaimer(text: str) -> str:
+
+    # Remove existing disclaimers completely
+    text = re.sub(
+    r"⚠️?\s*\*?This information[^*]*consult[^*]*doctor\*?",
+    "",
+    text,
+    flags=re.IGNORECASE,
+    )
+
+    # Append one clean disclaimer
+    text = text.strip() + "\n\n" + STANDARD_DISCLAIMER
+
+    return text
+
+
 # --------------------------------
 # Main Function
 # --------------------------------
@@ -90,7 +147,12 @@ def summarise_medical_sources(sources: dict, question: str) -> str:
 
         cleaned = clean_response_text(raw_summary)
 
-        # Light validation: ensure at least one citation exists
+        # Validate structure & citations
+        cleaned = ensure_required_headings(cleaned)
+        cleaned = validate_bullet_citations(cleaned)
+        cleaned = enforce_single_disclaimer(cleaned)
+
+        # Final fallback: ensure at least one citation exists
         if not re.search(r"\(Source\s+\d+", cleaned):
             cleaned += "\n\n⚠️ *Warning: Sources could not be reliably cited in this summary.*"
 
