@@ -51,7 +51,8 @@ search_branch = RunnableLambda(
         "route": "search",
         "question": x["input"],
         "history": x.get("history", []),
-        "documents": medical_search(x["input"]),  # raw documents only
+        "documents": medical_search(x["input"]).get("sources", {}),
+        "search_debug": medical_search(x["input"]).get("debug_info", {}),
     }
 )
 
