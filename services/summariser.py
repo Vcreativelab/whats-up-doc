@@ -25,7 +25,7 @@ Your task:
 - Write a **concise, evidence-based summary** in Markdown.
 - Use **clear section headings** (e.g. Overview, Causes, Symptoms, Treatment) only if supported by the sources.
 - Use **bullet points** under each heading.
-- **Every bullet point MUST end with at least one citation** like: (Source 1) or (Source 1, Source 3)
+- **Every bullet point MUST end with at least one citation** like: (cdc.gov) or (cdc.gov, nih.gov)
 - Only include information directly relevant to the user's question.
 - Ignore unrelated medical conditions even if present in the same source.
 - Only use the provided sources. Do NOT invent sources.
@@ -63,14 +63,13 @@ summarise_runnable = (
 # --------------------------------
 def format_sources_for_prompt(sources: dict) -> str:
     """
-    Convert {domain: snippet} into numbered source blocks.
+    Convert {domain: snippet} into domain-labelled blocks.
     """
     blocks = []
-    for i, (domain, snippet) in enumerate(sources.items(), start=1):
+    for domain, snippet in sources.items():
         blocks.append(
-            f"[Source {i}]\n"
-            f"Website: {domain}\n"
-            f"Content: {str(snippet).strip()}"
+            f"[{domain}]\n"
+            f"{str(snippet).strip()}"
         )
     return "\n\n".join(blocks)
 
