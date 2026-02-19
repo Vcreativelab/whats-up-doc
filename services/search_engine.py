@@ -4,13 +4,15 @@ services/search_engine.py
 Performs cached searches on verified medical websites using DuckDuckGo,
 with domain trust weighting, snippet quality scoring,
 and overall confidence estimation.
+
+UI-independent.
 """
 
 import re
-import streamlit as st
 from typing import Dict, Any
 from langchain.tools import StructuredTool
 from langchain_community.tools import DuckDuckGoSearchRun
+
 from core.cache_manager import (
     cache,
     cache_result,
@@ -37,7 +39,6 @@ DOMAIN_TRUST_WEIGHTS = {
 
 
 BAD_SNIPPET_PATTERNS = [
-    "site owner hides",
     "enable javascript",
     "enable cookies",
     "cookie policy",
@@ -51,11 +52,10 @@ BAD_SNIPPET_PATTERNS = [
 
 
 # ---------------------------------------------------------------------
-# Helper Functions
+# Helpers
 # ---------------------------------------------------------------------
 
 def truncate_snippet(snippet: str) -> str:
-    """Trim snippet to a clean readable length."""
     snippet = snippet.strip().replace("\n", " ")
     if len(snippet) > MAX_SNIPPET_LEN:
         snippet = snippet[:MAX_SNIPPET_LEN].rsplit(" ", 1)[0] + "..."
@@ -63,13 +63,12 @@ def truncate_snippet(snippet: str) -> str:
 
 
 def is_bad_snippet(snippet: str) -> bool:
-    """Detect low-quality or irrelevant snippets."""
     if not snippet:
         return True
 
     s = snippet.lower().strip()
 
-    if len(s) < 50:
+    if len(s) < 80:
         return True
 
     for bad in BAD_SNIPPET_PATTERNS:
@@ -80,39 +79,23 @@ def is_bad_snippet(snippet: str) -> bool:
 
 
 def compute_snippet_quality(snippet: str, query: str) -> float:
-    """
-    Compute snippet quality score (0–1).
-    Factors:
-        - Length adequacy
-        - Query term presence
-    """
     snippet_lower = snippet.lower()
     query_terms = re.findall(r"\w+", query.lower())
 
-    # Length score
     length_score = min(1.0, len(snippet) / MAX_SNIPPET_LEN)
 
-    # Query relevance score
     term_hits = sum(1 for term in query_terms if term in snippet_lower)
     relevance_score = min(1.0, term_hits / max(1, len(query_terms)))
 
     return round((0.6 * length_score) + (0.4 * relevance_score), 3)
 
 
-def compute_confidence(results: Dict[str, Any]) -> int:
-    """
-    Compute overall confidence score (0–100)
-    based on weighted source quality.
-    """
-    if not results:
+def compute_confidence(scores: list) -> int:
+    if not scores:
         return 0
 
-    scores = [data["final_score"] for data in results.values()]
     avg_score = sum(scores) / len(scores)
-
-    confidence = int(min(100, round(avg_score * 100 + (5 * len(results)))))
-
-    return confidence
+    return int(min(100, round(avg_score * 100)))
 
 
 # ---------------------------------------------------------------------
@@ -120,36 +103,21 @@ def compute_confidence(results: Dict[str, Any]) -> int:
 # ---------------------------------------------------------------------
 
 def medical_search(query: str) -> Dict[str, Any]:
-    """
-    Cached, trust-weighted medical search.
 
-    Returns:
-        {
-            "sources": {
-                domain: {
-                    "snippet": str,
-                    "trust_weight": float,
-                    "quality_score": float,
-                    "final_score": float
-                }
-            },
-            "confidence": int
-        }
-    """
     query_key = normalize_query_key(query)
-
     cached = get_cached_result(cache, query_key)
     if cached:
         return cached
 
-    st.caption(f"🌐 Searching verified medical sources for: **{query}**")
-
-    structured_results = {}
+    cleaned_sources = {}
+    debug_scores = {}
+    final_scores = []
+    domains_checked = []
 
     for domain, trust_weight in DOMAIN_TRUST_WEIGHTS.items():
-        try:
-            st.caption(f"🔎 Searching {domain} ...")
+        domains_checked.append(domain)
 
+        try:
             raw = search_engine.run(f"site:{domain} {query}")
 
             if not raw:
@@ -163,29 +131,34 @@ def medical_search(query: str) -> Dict[str, Any]:
             quality_score = compute_snippet_quality(snippet, query)
             final_score = round(trust_weight * quality_score, 3)
 
-            structured_results[domain] = {
-                "snippet": snippet,
+            if final_score < 0.25:
+                continue
+
+            cleaned_sources[domain] = snippet
+            debug_scores[domain] = {
                 "trust_weight": trust_weight,
                 "quality_score": quality_score,
                 "final_score": final_score,
             }
 
-            st.success(f"✅ {domain} scored {final_score}")
+            final_scores.append(final_score)
 
-        except Exception as e:
-            st.error(f"❌ Error searching {domain}: {e}")
+        except Exception:
+            continue
 
-    confidence = compute_confidence(structured_results)
+    confidence = compute_confidence(final_scores)
 
     final_payload = {
-        "sources": structured_results,
+        "sources": cleaned_sources,
         "confidence": confidence,
+        "debug_info": {
+            "scores": debug_scores,
+            "domains_checked": domains_checked,
+        }
     }
 
-    if structured_results:
+    if cleaned_sources:
         cache_result(cache, query_key, final_payload)
-    else:
-        st.warning(f"⚠️ No high-quality results found for '{query}'")
 
     return final_payload
 
