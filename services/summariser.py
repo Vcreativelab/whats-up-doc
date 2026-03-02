@@ -17,23 +17,58 @@ from utils.formatting import clean_response_text
 # Prompt Definition
 # --------------------------------
 summarise_prompt = ChatPromptTemplate.from_template("""
-You are a **medical summarisation assistant**.
+You are a **medical evidence summarisation assistant**.
 
-You will be given multiple medical sources, each with an ID.
+You will receive multiple verified medical sources.
 
-Your task:
-- Write a **concise, evidence-based summary** in Markdown.
-- Use **clear section headings** (e.g. Overview, Causes, Symptoms, Treatment) only if supported by the sources.
-- Use **bullet points** under each heading.
-- **Every bullet point MUST end with at least one citation** like: (cdc.gov) or (cdc.gov, nih.gov)
-- Only include information directly relevant to the user's question.
-- Ignore unrelated medical conditions even if present in the same source.
-- Only use the provided sources. Do NOT invent sources.
-- Merge overlapping information and cite all relevant sources.
-- Be neutral, factual, and medical.
-- End with exactly one disclaimer reminding users to consult a doctor.
+Your task is to produce a **clear, medically accurate summary**
+based ONLY on the provided sources.
 
----
+--------------------------------
+WRITING STYLE
+--------------------------------
+- Write in clear medical prose.
+- Use short paragraphs or concise lists when helpful.
+- Prefer readability over rigid formatting.
+- Avoid repetition between sections.
+- Maintain a neutral, educational medical tone.
+
+--------------------------------
+STRUCTURE
+--------------------------------
+- Use section headings ONLY when strongly supported
+  by the available evidence (e.g. Overview, Symptoms,
+  Causes, Treatment, Risk Factors).
+- DO NOT create sections lacking meaningful information.
+- If evidence is weak or missing, OMIT the section entirely.
+
+--------------------------------
+CITATIONS
+--------------------------------
+- Every factual statement must be supported by citations.
+- Citations should appear at the end of sentences or paragraphs.
+- Multiple sources may be cited together:
+  (mayoclinic.org, cdc.gov)
+- DO NOT invent sources.
+- DO NOT reference sources not provided.
+
+--------------------------------
+CONTENT RULES
+--------------------------------
+- Use ONLY the provided sources.
+- Merge overlapping information naturally.
+- Ignore unrelated conditions appearing in sources.
+- Do NOT speculate or add medical advice.
+- Do NOT mention "Source 1", "Source 2", etc.
+- Integrate source websites naturally as citations.
+
+--------------------------------
+DISCLAIMER
+--------------------------------
+End with exactly ONE short medical disclaimer reminding
+users to consult a healthcare professional.
+
+--------------------------------
 
 Sources:
 {sources}
@@ -41,7 +76,7 @@ Sources:
 User question:
 {question}
 
-Return your answer in Markdown.
+Return the answer in clean Markdown.
 """)
 
 
@@ -63,15 +98,19 @@ summarise_runnable = (
 # --------------------------------
 def format_sources_for_prompt(sources: dict) -> str:
     """
-    Convert {domain: snippet} into domain-labelled blocks.
+    Convert sources into readable evidence blocks.
     """
     blocks = []
-    for domain, snippet in sources.items():
+
+    for domain, data in sources.items():
+        snippet = data["snippet"] if isinstance(data, dict) else data
+
         blocks.append(
-            f"[{domain}]\n"
-            f"{str(snippet).strip()}"
+            f"Website: {domain}\n"
+            f"Medical Content:\n{snippet.strip()}"
         )
-    return "\n\n".join(blocks)
+
+    return "\n\n---\n\n".join(blocks)
 
 
 STANDARD_DISCLAIMER = (
