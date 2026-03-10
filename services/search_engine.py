@@ -44,6 +44,8 @@ from langchain_community.tools import DuckDuckGoSearchRun
 
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from functools import lru_cache
+import numpy as np
 
 from core.cache_manager import (
     cache,
@@ -65,7 +67,12 @@ search_engine = DuckDuckGoSearchRun()
 Sentence embedding model used for semantic similarity comparisons.
 Chosen for speed/quality balance.
 """
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+@lru_cache(maxsize=1)
+def load_embedding_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+embedding_model = load_embedding_model()
 
 # ---------------------------------------------------------------------
 # Config
@@ -222,7 +229,6 @@ def intent_weighted_trust(intent: str):
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
-
 def truncate(snippet):
     """
     Normalize and limit snippet length.
@@ -293,11 +299,29 @@ def confidence(scores):
         return 0
     return int(min(100, sum(scores) / len(scores) * 100))
 
+def recency_boost(text: str) -> float:
+    """
+    Apply a small score boost if the snippet
+    appears to reference recent medical information.
+    """
+    years = re.findall(r"\b(20[2-3][0-9])\b", text)
+
+    if not years:
+        return 1.0
+
+    latest = max(int(y) for y in years)
+
+    if latest >= 2023:
+        return 1.1
+    if latest >= 2020:
+        return 1.05
+
+    return 1.0
+
 
 # ---------------------------------------------------------------------
 # Parallel Search
 # ---------------------------------------------------------------------
-
 def search_domain(domain, trust, queries):
     """
     Perform domain-restricted search across query variants.
@@ -311,12 +335,11 @@ def search_domain(domain, trust, queries):
         (domain, best_result_dict)
     """
     best = None
-
+    
+    domain_pattern = re.compile(rf"\b{re.escape(domain)}\b", re.IGNORECASE)
     for q in queries:
         try:
-            raw = search_engine.run(
-                f"site:{domain} {q}"
-            )
+            raw = search_engine.run(f"site:{domain} {q}")
         except Exception:
             continue
 
@@ -324,8 +347,13 @@ def search_domain(domain, trust, queries):
             continue
 
         snippet = truncate(raw)
+
+        # Check that snippet contains the domain
+        if not domain_pattern.search(snippet):
+            continue
+
         qscore = compute_quality(snippet, q)
-        score = trust * qscore
+        score = trust * qscore * recency_boost(snippet)
 
         cand = {
             "snippet": snippet,
@@ -372,7 +400,6 @@ def rerank(query, results):
 # ---------------------------------------------------------------------
 # Relaxed Consensus Fusion
 # ---------------------------------------------------------------------
-
 def fuse(sources):
     """
     Merge evidence sentences supported by multiple sources.
@@ -388,10 +415,12 @@ def fuse(sources):
     str
         Consolidated evidence summary.
     """
+
     sentences = []
     owners = []
     trusts = []
 
+    # Gather sentences from all sources
     for d, data in sources.items():
         txt = data["snippet"]
         trust = data["trust"]
@@ -402,16 +431,18 @@ def fuse(sources):
             trusts.append(trust)
 
     fused = []
+    # Precompute embeddings once for efficiency
+    embeddings = np.array([get_embedding(s) for s in sentences])
+
 
     for i in range(len(sentences)):
+        agree = {owners[i]}  # initialize agreement set
 
-        agree = {owners[i]}
+        # Vectorized similarity with all subsequent embeddings
+        sims = cosine_similarity([embeddings[i]], embeddings[i+1:])[0]
 
-        for j in range(i + 1, len(sentences)):
-            if similarity(
-                sentences[i],
-                sentences[j]
-            ) > 0.65:
+        for j,sim in enumerate(sims, start=i+1):
+            if sim > 0.65:
                 agree.add(owners[j])
 
         if len(agree) >= 2 or trusts[i] > 0.9:
