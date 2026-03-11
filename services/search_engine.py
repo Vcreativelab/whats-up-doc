@@ -43,9 +43,10 @@ from langchain.tools import StructuredTool
 from langchain_community.tools import DuckDuckGoSearchRun
 
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
 from functools import lru_cache
 import numpy as np
+import requests
+from bs4 import BeautifulSoup
 
 from core.cache_manager import (
     cache,
@@ -253,6 +254,42 @@ def intent_weighted_trust(intent: str) -> Dict[str, float]:
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
+def extract_article_text(url: str) -> str:
+    """
+    Download and extract readable medical text
+    from a trusted source page.
+    """
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=8)
+        r.raise_for_status()
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        paragraphs = []
+
+        for p in soup.select("article p, main p, p"):
+            text = p.get_text(" ", strip=True)
+
+            if (
+                len(text) > 60
+                and not text.lower().startswith(("cookie", "privacy", "subscribe"))
+            ):
+                paragraphs.append(text)
+
+        article_text = " ".join(paragraphs)
+
+        return article_text[:3000]  # limit size
+
+    except Exception:
+        return ""
+
+
+def extract_url(raw_result: str) -> str | None:
+    match = re.search(r"https?://[^\s]+", raw_result)
+    return match.group(0) if match else None
+
+
 def truncate(snippet):
     """
     Normalize and limit snippet length.
@@ -301,7 +338,9 @@ def compute_quality(snippet, query):
         Quality score ∈ [0,1].
     """
     terms = re.findall(r"\w+", query.lower())
-    hits = sum(t in snippet.lower() for t in terms)
+   
+    snippet_tokens = re.findall(r"\w+", snippet.lower())
+    hits = sum(t in snippet_tokens for t in terms)
 
     return min(
         1.0,
@@ -369,8 +408,15 @@ def search_domain(domain, trust, queries):
         if not raw:
             continue
 
-        snippet = truncate(raw)
+        url = extract_url(raw)
 
+        if url:
+            article = extract_article_text(url)
+        else:
+            article = ""
+        
+        snippet = truncate(article if article else raw)
+     
         # Compute snippet score
         qscore = compute_quality(snippet, q)
         score = trust * qscore * recency_boost(snippet)
@@ -479,7 +525,7 @@ def fuse(sources):
     # Remove duplicates AFTER fusion
     fused = list(dict.fromkeys(fused))
  
-    return " ".join(fused[:8])
+    return " ".join(fused[:12])
 
 
 # ---------------------------------------------------------------------
