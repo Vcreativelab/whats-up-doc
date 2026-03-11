@@ -321,7 +321,7 @@ def confidence(scores):
     """
     if not scores:
         return 0
-    return int(min(100, sum(scores) / len(scores) * 100))
+    return int(min(100, max(0, sum(scores)/len(scores)*100)))
 
 def recency_boost(text: str) -> float:
     """
@@ -360,7 +360,6 @@ def search_domain(domain, trust, queries):
     """
     best = None
     
-    domain_pattern = re.compile(rf"\b{re.escape(domain)}\b", re.IGNORECASE)
     for q in queries:
         try:
             raw = search_engine.run(f"site:{domain} {q}")
@@ -372,10 +371,7 @@ def search_domain(domain, trust, queries):
 
         snippet = truncate(raw)
 
-        # Check that snippet contains the domain
-        if not domain_pattern.search(snippet):
-            continue
-
+        # Compute snippet score
         qscore = compute_quality(snippet, q)
         score = trust * qscore * recency_boost(snippet)
 
