@@ -264,7 +264,7 @@ def extract_article_text(url: str) -> str:
         r = requests.get(url, headers=headers, timeout=8)
         r.raise_for_status()
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(r.text, "lxml")
 
         paragraphs = []
 
