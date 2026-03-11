@@ -60,19 +60,79 @@ from core.cache_manager import (
 
 """
 DuckDuckGo search interface used for trusted-domain retrieval.
+
+This search tool queries the web while restricting results to
+predefined medical domains. It is used as the primary retrieval
+mechanism in the evidence pipeline before semantic filtering
+and reranking.
 """
 search_engine = DuckDuckGoSearchRun()
 
-"""
-Sentence embedding model used for semantic similarity comparisons.
-Chosen for speed/quality balance.
-"""
 
 @lru_cache(maxsize=1)
 def load_embedding_model():
+    """
+    Load the sentence embedding model.
+
+    The model is cached using LRU caching to ensure it is loaded
+    only once during the application lifecycle. This significantly
+    reduces startup latency and prevents repeated model loading
+    during Streamlit script reruns.
+
+    Returns
+    -------
+    SentenceTransformer
+        Preloaded sentence embedding model used for semantic
+        similarity calculations.
+    """
     return SentenceTransformer("all-MiniLM-L6-v2")
 
-embedding_model = load_embedding_model()
+
+def get_model():
+    """
+    Retrieve the cached embedding model instance.
+
+    This helper function provides a clean abstraction layer for
+    accessing the embedding model while ensuring lazy loading
+    via the cached loader.
+
+    Returns
+    -------
+    SentenceTransformer
+        Cached embedding model.
+    """
+    return load_embedding_model()
+
+
+@lru_cache(maxsize=2048)
+def get_embedding(text: str):
+    """
+    Compute and cache a normalized embedding vector for text.
+
+    Embeddings are cached using an LRU strategy to avoid repeated
+    inference for identical inputs. This dramatically improves
+    performance during semantic similarity comparisons where
+    the same sentences may be evaluated multiple times.
+
+    Parameters
+    ----------
+    text : str
+        Input sentence or snippet to encode.
+
+    Returns
+    -------
+    ndarray
+        Normalized sentence embedding vector suitable for
+        cosine similarity calculations.
+    """
+    model = get_model()
+
+    return model.encode(
+        text,
+        normalize_embeddings=True,
+        convert_to_numpy=True
+    )
+   
 
 # ---------------------------------------------------------------------
 # Config
@@ -103,42 +163,6 @@ NEGATION_TERMS = {
 }
 """Terms used to detect semantic negation in medical claims."""
 
-# ---------------------------------------------------------------------
-# ⭐ Embedding Cache
-# ---------------------------------------------------------------------
-
-_embedding_cache: Dict[str, Any] = {}
-"""
-In-memory cache storing computed embeddings.
-
-Purpose:
-    Avoid repeated model inference for identical text,
-    significantly reducing latency.
-"""
-
-
-def get_embedding(text: str):
-    """
-    Retrieve or compute normalized sentence embedding.
-
-    Parameters
-    ----------
-    text : str
-        Input text.
-
-    Returns
-    -------
-    ndarray
-        Normalized embedding vector.
-    """
-    if text not in _embedding_cache:
-        _embedding_cache[text] = embedding_model.encode(
-            text,
-            normalize_embeddings=True
-        )
-    return _embedding_cache[text]
-
-
 def similarity(a: str, b: str) -> float:
     """
     Compute cosine semantic similarity between two texts.
@@ -155,7 +179,7 @@ def similarity(a: str, b: str) -> float:
     """
     emb_a = get_embedding(a)
     emb_b = get_embedding(b)
-    return cosine_similarity([emb_a], [emb_b])[0][0]
+    return float(np.dot(emb_a, emb_b))
 
 
 # ---------------------------------------------------------------------
@@ -200,7 +224,7 @@ def detect_intent(query: str) -> str:
     return "general"
 
 
-def intent_weighted_trust(intent: str):
+def intent_weighted_trust(intent: str) -> Dict[str, float]:
     """
     Adjust domain trust weights based on detected intent.
 
@@ -370,7 +394,6 @@ def search_domain(domain, trust, queries):
 # ---------------------------------------------------------------------
 # Rerank
 # ---------------------------------------------------------------------
-
 def rerank(query, results):
     """
     Apply semantic reranking using embedding similarity.
@@ -429,32 +452,43 @@ def fuse(sources):
             sentences.append(s)
             owners.append(d)
             trusts.append(trust)
+    
+    # Initialize fused
+    fused = []   
 
-    fused = []
     # Precompute embeddings once for efficiency
+    if not sentences:
+        return ""
+    
     embeddings = np.array([get_embedding(s) for s in sentences])
-
 
     for i in range(len(sentences)):
         agree = {owners[i]}  # initialize agreement set
 
-        # Vectorized similarity with all subsequent embeddings
-        sims = cosine_similarity([embeddings[i]], embeddings[i+1:])[0]
+        # Prevent empty similarity computation
+        if i + 1 >= len(embeddings):
+            if trusts[i] > 0.9:
+                fused.append(sentences[i])
+            continue
 
-        for j,sim in enumerate(sims, start=i+1):
+        sims = np.dot(embeddings[i], embeddings[i+1:].T)
+
+        for j, sim in enumerate(sims, start=i+1):
             if sim > 0.65:
                 agree.add(owners[j])
 
         if len(agree) >= 2 or trusts[i] > 0.9:
             fused.append(sentences[i])
-
+         
+    # Remove duplicates AFTER fusion
+    fused = list(dict.fromkeys(fused))
+ 
     return " ".join(fused[:8])
 
 
 # ---------------------------------------------------------------------
 # Contradictions
 # ---------------------------------------------------------------------
-
 def contradictions(sources):
     """
     Detect semantic contradictions between domains.
@@ -500,7 +534,6 @@ def contradictions(sources):
 # ---------------------------------------------------------------------
 # Hallucination Firewall
 # ---------------------------------------------------------------------
-
 def firewall(fused, conf):
     """
     Apply safety validation before answering.
@@ -524,7 +557,6 @@ def firewall(fused, conf):
 # ---------------------------------------------------------------------
 # Core Engine
 # ---------------------------------------------------------------------
-
 def medical_search(query: str) -> Dict[str, Any]:
     """
     Execute full medical evidence retrieval pipeline.
@@ -637,7 +669,6 @@ def medical_search(query: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------
 # Tool Integration
 # ---------------------------------------------------------------------
-
 medical_search_tool = StructuredTool.from_function(
     func=medical_search,
     name="MedicalSearch",
