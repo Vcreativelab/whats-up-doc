@@ -57,10 +57,13 @@ CONTENT RULES
 --------------------------------
 - Use ONLY the provided sources.
 - Merge overlapping information naturally.
+- If common symptoms or treatments are clearly present in the sources,
+  summarise them explicitly rather than describing the condition generally.
 - Ignore unrelated conditions appearing in sources.
 - Do NOT speculate or add medical advice.
 - Do NOT mention "Source 1", "Source 2", etc.
 - Integrate source websites naturally as citations.
+
 
 --------------------------------
 DISCLAIMER
