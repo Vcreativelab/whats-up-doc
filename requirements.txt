@@ -18,9 +18,9 @@ langdetect==1.0.9
 
 # ─── Embeddings / Semantic Search ───
 sentence-transformers==3.0.1
-#scikit-learn==1.5.1
+scikit-learn==1.5.1
 torch==2.3.1
 
 # ─── Web Extraction ───
-requests==2.32.3
 beautifulsoup4==4.12.3
+lxml==5.2.2
