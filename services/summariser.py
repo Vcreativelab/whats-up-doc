@@ -53,6 +53,30 @@ CITATIONS
 - DO NOT reference sources not provided.
 
 --------------------------------
+INTENT GUIDELINES
+--------------------------------
+
+If intent = symptom:
+Focus on sections such as:
+- Symptoms
+- Causes
+- When to see a doctor
+
+If intent = drug:
+Focus on sections such as:
+- Uses
+- Dosage considerations
+- Side effects
+- Warnings
+
+If intent = general:
+Focus on:
+- Overview
+- Symptoms
+- Causes
+- Treatment
+
+--------------------------------
 CONTENT RULES
 --------------------------------
 - Use ONLY the provided sources.
@@ -60,6 +84,7 @@ CONTENT RULES
 - If common symptoms or treatments are clearly present in the sources,
   summarise them explicitly rather than describing the condition generally.
 - Ignore unrelated conditions appearing in sources.
+- Do NOT provide medical instructions or treatment advice unless explicitly supported by the sources.
 - Do NOT speculate or add medical advice.
 - Do NOT mention "Source 1", "Source 2", etc.
 - Integrate source websites naturally as citations.
@@ -75,6 +100,9 @@ users to consult a healthcare professional.
 
 Sources:
 {sources}
+
+Detected medical intent:
+{intent}
 
 User question:
 {question}
@@ -106,12 +134,25 @@ def format_sources_for_prompt(sources: dict) -> str:
     blocks = []
 
     for domain, data in sources.items():
-        snippet = data["snippet"] if isinstance(data, dict) else data
-
-        blocks.append(
-            f"Website: {domain}\n"
-            f"Medical Content:\n{snippet.strip()}"
-        )
+    
+        if isinstance(data, dict):
+            snippet = data.get("snippet", "")
+            url = data.get("url", "")
+        else:
+            snippet = data
+            url = ""
+        
+        if url:
+            blocks.append(
+                f"Website: {domain}\n"
+                f"URL: {url}\n"
+                f"Medical Content:\n{snippet.strip()}"
+            )
+        else:
+            blocks.append(
+                f"Website: {domain}\n"
+                f"Medical Content:\n{snippet.strip()}"
+            )
 
     return "\n\n---\n\n".join(blocks)
 
@@ -128,7 +169,7 @@ def enforce_single_disclaimer(text: str) -> str:
     """
 
     text = re.sub(
-        r"⚠️?\s*\*?This information[^*]*consult[^*]*doctor\*?",
+        r"⚠️?\s*\*?This information[^.]*consult[^.]*doctor\.?\*?",
         "",
         text,
         flags=re.IGNORECASE,
@@ -140,7 +181,7 @@ def enforce_single_disclaimer(text: str) -> str:
 # --------------------------------
 # Main Function
 # --------------------------------
-def summarise_medical_sources(sources: dict, question: str) -> str:
+def summarise_medical_sources(sources: dict, question: str, intent: str) -> str:
     """
     Generate a clean, structured, citation-grounded medical summary.
     """
@@ -153,12 +194,17 @@ def summarise_medical_sources(sources: dict, question: str) -> str:
 
         raw_summary = summarise_runnable.invoke({
             "sources": formatted_sources,
-            "question": question
+            "question": question,
+            "intent": intent
         })
 
         cleaned = clean_response_text(raw_summary)
-        cleaned = enforce_single_disclaimer(cleaned)
 
+        if len(cleaned.split()) < 30:
+            return "⚠️ The available sources did not contain enough clear medical information to generate a reliable summary."
+
+        cleaned = enforce_single_disclaimer(cleaned)
+    
         return cleaned
 
     except Exception as e:
