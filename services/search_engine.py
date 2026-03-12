@@ -139,7 +139,7 @@ def get_embedding(text: str):
 # Config
 # ---------------------------------------------------------------------
 
-MAX_SNIPPET_LEN = 500
+MAX_SNIPPET_LEN = 1200
 """Maximum characters retained from retrieved search snippets."""
 
 MAX_WORKERS = 5
@@ -158,9 +158,10 @@ Higher values influence ranking and consensus acceptance.
 """
 
 NEGATION_TERMS = {
-    "no", "not", "never",
-    "without", "avoid",
-    "contraindicated"
+    "no", "not", "never", "without",
+    "avoid", "contraindicated",
+    "lack", "absence",
+    "cannot", "doesn't"
 }
 """Terms used to detect semantic negation in medical claims."""
 
@@ -181,6 +182,36 @@ def similarity(a: str, b: str) -> float:
     emb_a = get_embedding(a)
     emb_b = get_embedding(b)
     return float(np.dot(emb_a, emb_b))
+
+
+def rank_paragraphs(query: str, paragraphs: list, top_k: int = 5):
+    """
+    Rank article paragraphs by semantic similarity to query.
+    """
+
+    q_emb = get_embedding(query)
+
+    scored = []
+
+    for p in paragraphs:
+        emb = get_embedding(p)
+        sim = float(np.dot(q_emb, emb))
+        scored.append((sim, p))
+
+    scored.sort(reverse=True)
+
+    best = [p for _, p in scored[:top_k]]
+
+    # Deduplicate
+    seen = set()
+    unique = []
+
+    for p in best:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+
+    return unique
 
 
 # ---------------------------------------------------------------------
@@ -254,32 +285,39 @@ def intent_weighted_trust(intent: str) -> Dict[str, float]:
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
-def extract_article_text(url: str) -> str:
+def extract_article_text(url: str, query: str) -> str:
     """
     Download and extract readable medical text
     from a trusted source page.
     """
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers, timeout=8)
+        r = requests.get(url, headers=headers, timeout=(3, 8))
         r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "lxml")
 
         paragraphs = []
 
-        for p in soup.select("article p, main p, p"):
+        for p in soup.select("article p, main p, section p, div p"):
+
+            if len(paragraphs) >= 50:
+                break
+
             text = p.get_text(" ", strip=True)
 
             if (
-                len(text) > 60
+                len(text) > 80
                 and not text.lower().startswith(("cookie", "privacy", "subscribe"))
             ):
                 paragraphs.append(text)
 
-        article_text = " ".join(paragraphs)
+        if not paragraphs:
+            return ""
 
-        return article_text[:3000]  # limit size
+        best = rank_paragraphs(query, paragraphs)
+
+        return "\n\n".join(best)
 
     except Exception:
         return ""
@@ -309,9 +347,27 @@ def split_sentences(text):
     """
     return [
         s.strip()
-        for s in re.split(r"[.!?]", text)
+        for s in re.split(r"(?<=[.!?])\s+", text)
         if len(s.strip()) > 40
     ]
+
+
+def filter_relevant_sentences(query: str, sentences: list, threshold: float = 0.45):
+    """
+    Remove sentences unrelated to the query using semantic similarity.
+    """
+
+    q_emb = get_embedding(query)
+    filtered = []
+
+    for s in sentences:
+        emb = get_embedding(s)
+        sim = float(np.dot(q_emb, emb))
+
+        if sim >= threshold:
+            filtered.append(s)
+
+    return filtered
 
 
 def contains_negation(text):
@@ -411,7 +467,7 @@ def search_domain(domain, trust, queries):
         url = extract_url(raw)
 
         if url:
-            article = extract_article_text(url)
+            article = extract_article_text(url, q)
         else:
             article = ""
         
@@ -465,67 +521,69 @@ def rerank(query, results):
 # ---------------------------------------------------------------------
 # Relaxed Consensus Fusion
 # ---------------------------------------------------------------------
-def fuse(sources):
+def fuse(query: str, sources):
     """
-    Merge evidence sentences supported by multiple sources.
-
-    Acceptance Rule
-    ----------------
-    ✔ Agreement across ≥2 domains
-    OR
-    ✔ Very high trust source (>0.9)
-
-    Returns
-    -------
-    str
-        Consolidated evidence summary.
+    Cluster sentences by semantic similarity and keep
+    representative evidence supported by multiple domains.
     """
 
     sentences = []
     owners = []
     trusts = []
 
-    # Gather sentences from all sources
     for d, data in sources.items():
         txt = data["snippet"]
         trust = data["trust"]
 
-        for s in split_sentences(txt):
+        filtered = filter_relevant_sentences(
+            query,
+            split_sentences(txt)
+        )
+
+        for s in filtered:
             sentences.append(s)
             owners.append(d)
             trusts.append(trust)
-    
-    # Initialize fused
-    fused = []   
 
-    # Precompute embeddings once for efficiency
     if not sentences:
         return ""
-    
+
     embeddings = np.array([get_embedding(s) for s in sentences])
 
-    for i in range(len(sentences)):
-        agree = {owners[i]}  # initialize agreement set
+    clusters = []
+    used = set()
 
-        # Prevent empty similarity computation
-        if i + 1 >= len(embeddings):
-            if trusts[i] > 0.9:
-                fused.append(sentences[i])
+    for i in range(len(sentences)):
+
+        if i in used:
             continue
 
-        sims = np.dot(embeddings[i], embeddings[i+1:].T)
+        cluster = [i]
+        used.add(i)
 
-        for j, sim in enumerate(sims, start=i+1):
-            if sim > 0.65:
-                agree.add(owners[j])
+        sims = np.dot(embeddings[i], embeddings.T)
 
-        if len(agree) >= 2 or trusts[i] > 0.9:
-            fused.append(sentences[i])
-         
-    # Remove duplicates AFTER fusion
-    fused = list(dict.fromkeys(fused))
- 
-    return " ".join(fused[:12])
+        for j, sim in enumerate(sims):
+
+            if j != i and j not in used and sim > 0.70:
+                cluster.append(j)
+                used.add(j)
+
+        clusters.append(cluster)
+
+    fused = []
+
+    for cluster in clusters:
+
+        cluster_domains = {owners[i] for i in cluster}
+        cluster_trust = max(trusts[i] for i in cluster)
+
+        if len(cluster_domains) >= 2 or cluster_trust > 0.9:
+
+            rep_sentence = sentences[cluster[0]]
+            fused.append(rep_sentence)
+
+    return " ".join(fused[:10])
 
 
 # ---------------------------------------------------------------------
@@ -682,7 +740,7 @@ def medical_search(query: str) -> Dict[str, Any]:
 
     conf = confidence(scores)
 
-    fused = fuse(ranked)
+    fused = fuse(query, ranked)
 
     issues = contradictions(ranked)
 
