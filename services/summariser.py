@@ -47,6 +47,8 @@ CITATIONS
 --------------------------------
 - Every factual statement must be supported by citations.
 - Citations should appear at the end of sentences or paragraphs.
+- Use the domain shown in each SOURCE tag when citing evidence.
+Example: (mayoclinic.org)
 - Multiple sources may be cited together:
   (mayoclinic.org, cdc.gov)
 - DO NOT invent sources.
@@ -144,15 +146,15 @@ def format_sources_for_prompt(sources: dict) -> str:
         
         if url:
             blocks.append(
-                f"Website: {domain}\n"
+                f"[SOURCE: {domain}]\n"
                 f"URL: {url}\n"
-                f"Medical Content:\n{snippet.strip()}"
+                f"{snippet.strip()}"
             )
         else:
             blocks.append(
-                f"Website: {domain}\n"
-                f"Medical Content:\n{snippet.strip()}"
-            )
+                f"[SOURCE: {domain}]\n"
+                f"{snippet.strip()}"
+        )
 
     return "\n\n---\n\n".join(blocks)
 
