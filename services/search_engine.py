@@ -480,7 +480,8 @@ def search_domain(domain, trust, queries):
         cand = {
             "snippet": snippet,
             "score": score,
-            "trust": trust
+            "trust": trust,
+            "url": url  
         }
 
         if not best or score > best["score"]:
