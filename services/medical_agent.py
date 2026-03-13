@@ -147,6 +147,7 @@ def get_medical_answer(query: str, debug: bool = False) -> dict:
             english_response = summarise_medical_sources(
                 routed.get("documents"),
                 routed.get("question"),
+                routed.get("intent", "general")
             )
 
         else:
