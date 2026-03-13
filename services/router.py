@@ -47,13 +47,16 @@ def route(input_text: str) -> str:
 # Search Branch (NO summarisation)
 # --------------------------------
 search_branch = RunnableLambda(
-    lambda x: {
-        "route": "search",
-        "question": x["input"],
-        "history": x.get("history", []),
-        "documents": medical_search(x["input"]).get("sources", {}),
-        "search_debug": medical_search(x["input"]).get("debug_info", {}),
-    }
+    lambda x: (
+        lambda result: {
+            "route": "search",
+            "question": x["input"],
+            "history": x.get("history", []),
+            "documents": result.get("sources", {}),
+            "intent": result.get("intent", "general"),
+            "search_debug": result.get("debug_info", {}),
+        }
+    )(medical_search(x["input"]))
 )
 
 
