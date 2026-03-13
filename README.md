@@ -3,8 +3,20 @@
 **What’s Up Doc?** is a multilingual, evidence-based medical assistant built with **Streamlit**, **LangChain**, and **Google Gemini**.  
 It can understand medical questions in multiple languages, translate them to English, route them intelligently, generate or summarise medical answers, and translate responses back to the user’s language — all with caching, rate limiting, and safety disclaimers.
 
-> ⚠️ This app is for educational purposes only and does not replace professional medical advice.
+## 🎯 Project Goals
 
+This project explores how to build **safe, grounded medical AI assistants**
+using retrieval-augmented generation (RAG), multilingual translation,
+and strict evidence summarisation.
+
+Key design principles:
+
+- Reduce hallucinations using grounded medical sources
+- Maintain transparency through citations
+- Provide clear, structured explanations
+- Support multilingual medical queries
+
+> ⚠️ This app is for educational purposes only and does not replace professional medical advice.
 ---
 
 ## 🔗 Demo
@@ -28,7 +40,20 @@ It can understand medical questions in multiple languages, translate them to Eng
 ### 🔀 Smart routing
 Decides between:
 - Direct LLM response, or  
-- Summarised response from verified medical sources  
+- Summarised response from verified medical sources
+
+### 🔎 Medical Evidence Retrieval Engine
+
+When external information is needed, the system performs a grounded
+medical search pipeline:
+
+- Trusted medical domain filtering (CDC, NIH, Mayo Clinic, etc.)
+- Parallel domain search
+- Paragraph-level extraction from medical articles
+- Semantic reranking using sentence embeddings
+- Evidence fusion across multiple sources
+- Basic contradiction detection
+- Safety firewall preventing weak-evidence answers
 
 ### 📚 Summarisation pipeline
 - Summarises multi-source medical content  
@@ -55,25 +80,40 @@ Decides between:
 
 ## 🏗️ Architecture (High Level)
 ```
-User Query
-↓
-Language Detection & Translation (if needed)
-↓
-Short-term Memory Injection
-↓
-Router (Search/Summarise vs Direct Answer)
-↓
-Either:
+User Query  
+↓  
+Language Detection & Translation  
+↓  
+Short-term Memory Injection  
+↓  
+Router (Search vs Direct Answer)  
+↓  
 
-      - Summariser (for sourced content)
-      
-      - Gemini Medical Prompt (direct answer)
-        ↓
-        Response Cleanup
-        ↓
-        Back-Translation (if needed)
-        ↓
-        Final Answer to User
+If search is required:
+
+Search Engine  
+↓  
+Trusted-domain retrieval  
+↓  
+Paragraph extraction  
+↓  
+Semantic reranking  
+↓  
+Evidence fusion  
+↓  
+Medical summariser  
+↓  
+
+Otherwise:
+
+Direct Gemini medical response  
+
+↓  
+Response cleanup  
+↓  
+Back-translation (if needed)  
+↓  
+Final Answer
 ```
 
 ---
@@ -82,9 +122,12 @@ Either:
 
 - **Frontend:** Streamlit  
 - **LLM Orchestration:** LangChain  
-- **Models:** Google Gemini (e.g. `gemini-2.5-flash-lite`, `gemini-2.5-flash`)  
+- **Models:** Google Gemini (`gemini-2.5-flash-lite`, `gemini-2.5-flash`)  
+- **Search:** DuckDuckGo  
+- **Embeddings:** Sentence Transformers (`all-MiniLM-L6-v2`)  
+- **Web Extraction:** BeautifulSoup  
 - **Language:** Python  
-- **Caching:** Custom in-memory cache  
+- **Caching:** Disk-based caching (diskcache)  
 - **Rate Limiting:** Custom token-based limiter  
 
 ---
@@ -98,8 +141,9 @@ Either:
 │ ├── cache_manager.py # Translation caches
 │ └── memory_manager.py # Conversation memory
 │
-├── services/
+├── services/ 
 │ ├── medical_agent.py # Main orchestration logic
+│ ├── search_engine.py # Medical evidence retrieval engine
 │ ├── translator.py # Language detection & translation
 │ ├── summariser.py # Medical summarisation logic
 │ └── router.py # Routing logic (search vs direct)
