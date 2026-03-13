@@ -181,7 +181,10 @@ def enforce_single_disclaimer(text: str) -> str:
 # --------------------------------
 # Main Function
 # --------------------------------
-def summarise_medical_sources(sources: dict, question: str, intent: str) -> str:
+def summarise_medical_sources(sources: dict, 
+                              question: str, 
+                              intent: str = "general"
+                             ) -> str:
     """
     Generate a clean, structured, citation-grounded medical summary.
     """
